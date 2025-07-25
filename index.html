@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mass Proxy Printer Grand Archive</title>
+</head>
+<body>
+  <h1>Lista Carte</h1>
+  <textarea id="cardInput" rows="10" cols="40" placeholder="4 Lorraine
+2 Fire Resonance"></textarea><br>
+  <button onclick="generatePDF()">Genera PDF</button>
+
+  <p id="status"></p>
+
+  <script>
+    async function generatePDF() {
+      const lines = document.getElementById('cardInput').value.split('\n');
+      const cards = [];
+
+      for (const line of lines) {
+        const match = line.trim().match(/^(\d+)\s+(.+)$/);
+        if (match) {
+          const count = parseInt(match[1]);
+          const name = match[2].trim();
+          cards.push({ name, count });
+        }
+      }
+
+      if (cards.length === 0) {
+        document.getElementById('status').textContent = 'Nessuna carta valida trovata.';
+        return;
+      }
+
+      document.getElementById('status').textContent = 'Generazione in corso...';
+
+      const response = await fetch('https://TUO_BACKEND.render.com/genera_pdf', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ cards })
+      });
+
+      if (!response.ok) {
+        document.getElementById('status').textContent = 'Errore nella generazione.';
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'carte.pdf';
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.getElementById('status').textContent = 'PDF generato!';
+    }
+  </script>
+</body>
+</html>
