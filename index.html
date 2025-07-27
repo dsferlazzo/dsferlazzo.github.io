@@ -34,7 +34,7 @@
 
       document.getElementById('status').textContent = 'Generazione in corso...';
 
-      const response = await fetch('https://dsferlazzo-github-io.onrender.com', {
+      const response = await fetch('https://dsferlazzo-github-io.onrender.com/genera_pdf', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ cards })
