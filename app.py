@@ -86,12 +86,11 @@ def genera_pdf():
                 tmp.write(buffer.read())
                 tmp.flush()
                 pdf.add_page()
-                pdf.image(tmp.name, x=15, y=15, w=180)
+                pdf.image(tmp.name, x=15, y=15, w=180, h=250)
 
 
     output = BytesIO()
-    pdf_data = pdf.output(dest='S').encode('latin1')  # Ottieni PDF come stringa bytes
-    output.write(pdf_data)
+    pdf.output(output)  # salva direttamente sul buffer
     output.seek(0)
     return send_file(output, as_attachment=True, download_name="carte.pdf", mimetype='application/pdf')
 
