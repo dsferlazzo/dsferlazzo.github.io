@@ -1,10 +1,12 @@
 from flask import Flask, request, send_file
+from flask_cors import CORS
 import requests
 from fpdf import FPDF
 from io import BytesIO
 from PIL import Image
 
 app = Flask(__name__)
+CORS(app)  # ✅ Abilita CORS su tutte le rotte
 
 API_BASE = "https://api.gatcg.com"
 
