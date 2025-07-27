@@ -1,6 +1,7 @@
 from flask import Flask, request, send_file
 from flask_cors import CORS
 import requests
+import re
 from fpdf import FPDF
 from io import BytesIO
 from PIL import Image
