@@ -31,7 +31,15 @@ def get_card_image_url(card_name):
             return None
         data = response.json()
         if data and data.get("data"):
-            return data["data"][0]["image"]
+            card_data = data["data"][0]
+            # Prendi il primo elemento "edition" e da lì l'immagine
+            editions = card_data.get("editions", [])
+            if editions and editions[0].get("image"):
+                image_path = editions[0]["image"]
+                full_image_url = API_BASE + image_path
+                return full_image_url
+            print(f"⚠️ Nessuna immagine trovata per {normalized_name}")
+            return None
         print(f"⚠️ Nessun risultato per {normalized_name}")
         return None
     except Exception as e:
