@@ -11,11 +11,20 @@ CORS(app)  # ✅ Abilita CORS su tutte le rotte
 API_BASE = "https://api.gatcg.com"
 
 def get_card_image_url(card_name):
-    response = requests.get(f"{API_BASE}/cards", params={"name": card_name})
-    data = response.json()
-    if data and data.get("data"):
-        return data["data"][0]["image"]
-    return None
+    try:
+        response = requests.get(f"{API_BASE}/cards", params={"name": card_name})
+        if response.status_code != 200:
+            print(f"Errore API per {card_name}: {response.status_code}")
+            return None
+        data = response.json()
+        if data and data.get("data"):
+            return data["data"][0]["image"]
+        print(f"⚠️ Nessun risultato per {card_name}")
+        return None
+    except Exception as e:
+        print(f"Eccezione in get_card_image_url({card_name}): {e}")
+        return None
+
 
 @app.route('/')
 def home():
