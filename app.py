@@ -17,6 +17,11 @@ def get_card_image_url(card_name):
         return data["data"][0]["image"]
     return None
 
+@app.route('/')
+def home():
+    return "✅ Backend attivo su Render"
+
+
 @app.route('/genera_pdf', methods=['POST'])
 def genera_pdf():
     content = request.json
