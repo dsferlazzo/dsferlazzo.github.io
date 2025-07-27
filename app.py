@@ -90,7 +90,8 @@ def genera_pdf():
 
 
     output = BytesIO()
-    pdf.output(output)  # salva direttamente sul buffer
+    pdf_data = pdf.output(dest='S').encode('latin1')  # Ottieni PDF come stringa bytes
+    output.write(pdf_data)
     output.seek(0)
     return send_file(output, as_attachment=True, download_name="carte.pdf", mimetype='application/pdf')
 
