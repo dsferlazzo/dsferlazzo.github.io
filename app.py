@@ -2,6 +2,7 @@ from flask import Flask, request, send_file
 from flask_cors import CORS
 import requests
 import re
+import tempfile
 from fpdf import FPDF
 from io import BytesIO
 from PIL import Image
@@ -80,8 +81,13 @@ def genera_pdf():
             buffer = BytesIO()
             img.save(buffer, format="JPEG")
             buffer.seek(0)
-            pdf.add_page()
-            pdf.image(buffer, x=15, y=15, w=180)
+
+            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                tmp.write(buffer.read())
+                tmp.flush()
+                pdf.add_page()
+                pdf.image(tmp.name, x=15, y=15, w=180)
+
 
     output = BytesIO()
     pdf_data = pdf.output(dest='S').encode('latin1')  # Ottieni PDF come stringa bytes
