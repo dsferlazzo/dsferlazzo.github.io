@@ -10,19 +10,31 @@ CORS(app)  # ✅ Abilita CORS su tutte le rotte
 
 API_BASE = "https://api.gatcg.com"
 
+def normalize_card_name(name: str) -> str:
+    # 1. togli punteggiatura (tutti i caratteri che non sono lettere, numeri o spazi)
+    name = re.sub(r"[^\w\s]", "", name)
+    # 2. sostituisci spazi multipli con uno solo
+    name = re.sub(r"\s+", " ", name)
+    # 3. sostituisci spazi con "-"
+    name = name.strip().replace(" ", "-")
+    # 4. minuscolo
+    name = name.lower()
+    return name
+
 def get_card_image_url(card_name):
     try:
-        response = requests.get(f"{API_BASE}/cards", params={"name": card_name})
+        normalized_name = normalize_card_name(card_name)
+        response = requests.get(f"{API_BASE}/cards", params={"name": normalized_name})
         if response.status_code != 200:
-            print(f"Errore API per {card_name}: {response.status_code}")
+            print(f"Errore API per {normalized_name}: {response.status_code}")
             return None
         data = response.json()
         if data and data.get("data"):
             return data["data"][0]["image"]
-        print(f"⚠️ Nessun risultato per {card_name}")
+        print(f"⚠️ Nessun risultato per {normalized_name}")
         return None
     except Exception as e:
-        print(f"Eccezione in get_card_image_url({card_name}): {e}")
+        print(f"Eccezione in get_card_image_url({normalized_name}): {e}")
         return None
 
 
