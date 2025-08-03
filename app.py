@@ -111,70 +111,129 @@ def genera_pdf():
         os.close(pdf_fd)  # Chiudi il file descriptor
         
         pdf = FPDF(unit='mm', format='A4')
-        pdf.set_auto_page_break(auto=True, margin=10)
+        pdf.set_auto_page_break(auto=False)  # Disabilita page break automatico per controllo manuale
         
         temp_images = []
-        total_cards_added = 0
+        total_cards_processed = 0
+        
+        # Dimensioni carta in mm - 6.4cm x 8.9cm
+        CARD_WIDTH = 64  # 6.4 cm
+        CARD_HEIGHT = 89  # 8.9 cm
+        
+        # Layout griglia 3x3
+        CARDS_PER_ROW = 3
+        CARDS_PER_COL = 3
+        CARDS_PER_PAGE = CARDS_PER_ROW * CARDS_PER_COL  # 9 carte per pagina
+        
+        # Calcola margini per centrare la griglia nella pagina A4 (210x297mm)
+        PAGE_WIDTH = 210
+        PAGE_HEIGHT = 297
+        GRID_WIDTH = CARDS_PER_ROW * CARD_WIDTH  # 192mm
+        GRID_HEIGHT = CARDS_PER_COL * CARD_HEIGHT  # 267mm
+        
+        START_X = (PAGE_WIDTH - GRID_WIDTH) / 2  # Centra orizzontalmente
+        START_Y = (PAGE_HEIGHT - GRID_HEIGHT) / 2  # Centra verticalmente
+        
+        print(f"📐 Layout: {CARDS_PER_ROW}x{CARDS_PER_COL} = {CARDS_PER_PAGE} carte per pagina")
+        print(f"📐 Dimensioni carta: {CARD_WIDTH}x{CARD_HEIGHT}mm")
+        print(f"📐 Margini: START_X={START_X:.1f}mm, START_Y={START_Y:.1f}mm")
+        
+        # Lista di tutte le carte da stampare (espanse per quantità)
+        all_cards = []
+        for entry in card_entries:
+            name = entry.get("name", "").strip()
+            count = int(entry.get("count", 1))
+            
+            if not name:
+                continue
+            
+            for _ in range(count):
+                all_cards.append(name)
+        
+        print(f"📋 Totale carte da stampare: {len(all_cards)}")
+        
+        # Processa le carte e scarica le immagini
+        card_images = {}  # Cache delle immagini per evitare download multipli
         
         try:
-            for entry in card_entries:
-                name = entry.get("name", "").strip()
-                count = int(entry.get("count", 1))
-                
-                if not name:
-                    continue
+            for i, card_name in enumerate(all_cards):
+                if card_name not in card_images:
+                    print(f"🔄 Processando carta {card_name} ({i+1}/{len(all_cards)})")
                     
-                print(f"🔄 Processando: {name} (x{count})")
-                
-                image_url = get_card_image_url(name)
-                if not image_url:
-                    print(f"❌ Nessun URL per {name}")
-                    continue
-                
-                try:
-                    # Scarica immagine
-                    print(f"⬇️ Scaricando: {image_url}")
-                    img_response = requests.get(image_url, timeout=15)
-                    img_response.raise_for_status()
+                    image_url = get_card_image_url(card_name)
+                    if not image_url:
+                        print(f"❌ Nessun URL per {card_name}")
+                        continue
                     
-                    print(f"📦 Dimensione immagine: {len(img_response.content)} bytes")
-                    
-                    # Processa immagine
-                    img = Image.open(BytesIO(img_response.content))
-                    if img.mode != 'RGB':
-                        img = img.convert('RGB')
-                    
-                    # Ridimensiona mantenendo proporzioni
-                    target_width, target_height = 540, 750  # 180*3, 250*3 per qualità
-                    img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
-                    
-                    # Salva immagine temporanea
-                    img_fd, img_path = tempfile.mkstemp(suffix='.jpg')
-                    os.close(img_fd)
-                    temp_images.append(img_path)
-                    
-                    img.save(img_path, format='JPEG', quality=95, optimize=True)
-                    print(f"💾 Immagine salvata: {img_path}")
-                    
-                    # Aggiungi al PDF
-                    for i in range(count):
-                        pdf.add_page()
-                        pdf.image(img_path, x=15, y=15, w=180, h=250)
-                        total_cards_added += 1
-                        print(f"➕ Aggiunta carta {total_cards_added}: {name} ({i+1}/{count})")
-                    
-                except requests.RequestException as e:
-                    print(f"❌ Errore download {name}: {e}")
-                    continue
-                except Exception as e:
-                    print(f"❌ Errore processamento {name}: {e}")
-                    continue
+                    try:
+                        # Scarica immagine
+                        print(f"⬇️ Scaricando: {image_url}")
+                        img_response = requests.get(image_url, timeout=15)
+                        img_response.raise_for_status()
+                        
+                        # Processa immagine
+                        img = Image.open(BytesIO(img_response.content))
+                        if img.mode != 'RGB':
+                            img = img.convert('RGB')
+                        
+                        # Ridimensiona per la stampa (risoluzione 300 DPI)
+                        # 6.4cm @ 300 DPI = 756 pixels, 8.9cm @ 300 DPI = 1051 pixels
+                        target_width = int(6.4 * 300 / 2.54)  # ~756px
+                        target_height = int(8.9 * 300 / 2.54)  # ~1051px
+                        img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+                        
+                        # Salva immagine temporanea
+                        img_fd, img_path = tempfile.mkstemp(suffix='.jpg')
+                        os.close(img_fd)
+                        temp_images.append(img_path)
+                        
+                        img.save(img_path, format='JPEG', quality=95, optimize=True)
+                        card_images[card_name] = img_path
+                        print(f"💾 Immagine cached: {card_name}")
+                        
+                    except requests.RequestException as e:
+                        print(f"❌ Errore download {card_name}: {e}")
+                        continue
+                    except Exception as e:
+                        print(f"❌ Errore processamento {card_name}: {e}")
+                        continue
             
-            if total_cards_added == 0:
+            # Ora crea le pagine PDF con layout griglia
+            cards_on_current_page = 0
+            
+            for i, card_name in enumerate(all_cards):
+                if card_name not in card_images:
+                    continue
+                
+                # Inizia una nuova pagina se necessario
+                if cards_on_current_page == 0:
+                    pdf.add_page()
+                    print(f"📄 Nuova pagina PDF")
+                
+                # Calcola posizione nella griglia
+                row = cards_on_current_page // CARDS_PER_ROW
+                col = cards_on_current_page % CARDS_PER_ROW
+                
+                x = START_X + (col * CARD_WIDTH)
+                y = START_Y + (row * CARD_HEIGHT)
+                
+                # Aggiungi carta al PDF
+                pdf.image(card_images[card_name], x=x, y=y, w=CARD_WIDTH, h=CARD_HEIGHT)
+                
+                total_cards_processed += 1
+                cards_on_current_page += 1
+                
+                print(f"➕ Carta {total_cards_processed}: {card_name} -> pos({col},{row}) @ ({x:.1f},{y:.1f})mm")
+                
+                # Reset contatore se pagina piena
+                if cards_on_current_page >= CARDS_PER_PAGE:
+                    cards_on_current_page = 0
+            
+            if total_cards_processed == 0:
                 return jsonify({"error": "Nessuna carta è stata aggiunta al PDF"}), 400
             
             # Genera PDF
-            print(f"📄 Generando PDF con {total_cards_added} carte...")
+            print(f"📄 Generando PDF con {total_cards_processed} carte...")
             pdf.output(pdf_path)
             
             # Verifica che il file esista e non sia vuoto
@@ -234,9 +293,3 @@ def debug_cards():
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
-
-
-
-
-
-
