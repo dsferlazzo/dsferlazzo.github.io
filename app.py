@@ -59,7 +59,7 @@ def home():
 def test_api():
     """Endpoint per testare l'API esterna"""
     try:
-        card_name = Merlin, Kingslayer
+        card_name = "Merlin, Kingslayer"
         normalized_name = normalize_card_name(card_name)
         response = requests.get(f"{API_BASE}/cards", params={"name": normalized_name}, timeout=10)
         return jsonify({
@@ -216,5 +216,6 @@ def debug_cards():
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
+
 
 
