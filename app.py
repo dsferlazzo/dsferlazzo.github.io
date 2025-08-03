@@ -3,6 +3,7 @@ from flask_cors import CORS
 import requests
 import re
 import tempfile
+import os
 from fpdf import FPDF
 from io import BytesIO
 from PIL import Image
@@ -47,51 +48,91 @@ def get_card_image_url(card_name):
         print(f"Eccezione in get_card_image_url({normalized_name}): {e}")
         return None
 
-
 @app.route('/')
 def home():
     return "✅ Backend attivo su Render"
-
 
 @app.route('/genera_pdf', methods=['POST'])
 def genera_pdf():
     content = request.json
     card_entries = content.get("cards", [])
-
+    
     pdf = FPDF(unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=10)
+    
+    # Lista per tenere traccia dei file temporanei da pulire
+    temp_files = []
+    
+    try:
+        for entry in card_entries:
+            name = entry.get("name")
+            count = entry.get("count", 1)
+            
+            print(f"📋 Processando: {name} (x{count})")
+            
+            image_url = get_card_image_url(name)
+            if not image_url:
+                print(f"Nessun URL trovato per {name}")
+                continue
+            
+            try:
+                print(f"🔗 Scaricando immagine da: {image_url}")
+                img_response = requests.get(image_url, timeout=10)
+                img_response.raise_for_status()  # Solleva eccezione se status non è 200
+                
+                # Apri e ridimensiona l'immagine
+                img = Image.open(BytesIO(img_response.content)).convert("RGB")
+                img = img.resize((540, 750))  # Risoluzione per qualità stampa (180*3, 250*3)
+                
+                # Salva l'immagine in un file temporaneo
+                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                    img.save(tmp, format="JPEG", quality=95)
+                    tmp_path = tmp.name
+                    temp_files.append(tmp_path)
+                
+                # Aggiungi le pagine al PDF
+                for i in range(count):
+                    pdf.add_page()
+                    pdf.image(tmp_path, x=15, y=15, w=180, h=250)
+                    print(f"✅ Aggiunta carta {name} ({i+1}/{count})")
+                    
+            except Exception as e:
+                print(f"Errore con {name}: {e}")
+                continue
+        
+        # CORREZIONE PRINCIPALE: Genera il PDF direttamente in BytesIO
+        output = BytesIO()
+        pdf_content = pdf.output(dest='S')  # Ottieni come stringa
+        
+        # Se pdf_content è già bytes, usalo direttamente
+        if isinstance(pdf_content, bytes):
+            output.write(pdf_content)
+        else:
+            # Se è stringa, convertilo in bytes usando latin1
+            output.write(pdf_content.encode('latin1'))
+        
+        output.seek(0)
+        
+        print(f"✅ PDF generato con successo. Dimensione: {len(output.getvalue())} bytes")
+        
+        return send_file(
+            output, 
+            as_attachment=True, 
+            download_name="carte.pdf", 
+            mimetype='application/pdf'
+        )
+        
+    except Exception as e:
+        print(f"Errore generale nella generazione PDF: {e}")
+        return {"error": "Errore nella generazione del PDF"}, 500
+        
+    finally:
+        # Pulisci i file temporanei
+        for temp_file in temp_files:
+            try:
+                os.unlink(temp_file)
+            except Exception as e:
+                print(f"⚠️ Errore nella pulizia del file temporaneo {temp_file}: {e}")
 
-    for entry in card_entries:
-        name = entry.get("name")
-        count = entry.get("count", 1)
-
-        image_url = get_card_image_url(name)
-        if not image_url:
-            continue
-
-        try:
-            img_response = requests.get(image_url)
-            img = Image.open(BytesIO(img_response.content)).convert("RGB")
-            img = img.resize((180 * 3, 250 * 3))  # Risoluzione per qualità stampa
-        except Exception as e:
-            print(f"Errore con {name}: {e}")
-            continue
-
-        for _ in range(count):
-            buffer = BytesIO()
-            img.save(buffer, format="JPEG")
-            buffer.seek(0)
-
-            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-                tmp.write(buffer.read())
-                tmp.flush()
-                pdf.add_page()
-                pdf.image(tmp.name, x=15, y=15, w=180, h=250)
-
-
-    output = BytesIO()
-    pdf_data = pdf.output(dest='S').encode('latin1')  # Ottieni PDF come stringa bytes
-    output.write(pdf_data)
-    output.seek(0)
-    return send_file(output, as_attachment=True, download_name="carte.pdf", mimetype='application/pdf')
-
+if __name__ == '__main__':
+    app.run(debug=True)
