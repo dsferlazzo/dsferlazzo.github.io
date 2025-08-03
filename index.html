@@ -271,7 +271,7 @@
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
         
-        setStatus(`✅ PDF generato! (${blob.size} bytes)`, 'success');
+        setStatus(`✅ PDF generato! (${cards.length} carte)`, 'success');
         
         // Mostra info PDF solo se debug è abilitato
         if (document.getElementById('showDebug').checked) {
@@ -290,6 +290,7 @@
   </script>
 </body>
 </html>
+
 
 
 
