@@ -4,6 +4,8 @@ import requests
 import re
 import tempfile
 import os
+import time
+import concurrent.futures
 from fpdf import FPDF
 from io import BytesIO
 from PIL import Image
@@ -25,7 +27,7 @@ def get_card_image_url(card_name):
         normalized_name = normalize_card_name(card_name)
         print(f"🔍 Cercando: {card_name} → {normalized_name}")
         
-        response = requests.get(f"{API_BASE}/cards/" + normalized_name, timeout=10)
+        response = requests.get(f"{API_BASE}/cards/" + normalized_name, timeout=8)  # Ridotto timeout
         print(f"📡 API Response Status: {response.status_code}")
         
         if response.status_code != 200:
@@ -69,6 +71,53 @@ def get_card_image_url(card_name):
         print(f"❌ Eccezione in get_card_image_url({card_name}): {e}")
         return None
 
+def download_and_process_card_image(card_name):
+    """
+    Funzione per download e processamento parallelo di una singola carta
+    Ritorna: (card_name, img_path) o (card_name, None) in caso di errore
+    """
+    try:
+        print(f"🔄 Thread processando: {card_name}")
+        
+        # Ottieni URL immagine
+        image_url = get_card_image_url(card_name)
+        if not image_url:
+            print(f"❌ Nessun URL per {card_name}")
+            return card_name, None
+        
+        # Scarica immagine con timeout ridotto
+        print(f"⬇️ Thread scaricando: {image_url}")
+        img_response = requests.get(image_url, timeout=10)  # Ridotto da 15 a 10
+        img_response.raise_for_status()
+        
+        # Processa immagine
+        img = Image.open(BytesIO(img_response.content))
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        # Ridimensiona con risoluzione ridotta per velocità
+        # Uso 250 DPI invece di 300 per bilanciare qualità/velocità
+        target_width = int(6.4 * 250 / 2.54)  # ~630px invece di 756px
+        target_height = int(8.9 * 250 / 2.54)  # ~875px invece di 1051px
+        img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+        
+        # Salva immagine temporanea
+        img_fd, img_path = tempfile.mkstemp(suffix='.jpg')
+        os.close(img_fd)
+        
+        # Qualità ridotta per velocità
+        img.save(img_path, format='JPEG', quality=85, optimize=True)  # Da 95 a 85
+        print(f"💾 Thread completato: {card_name}")
+        
+        return card_name, img_path
+        
+    except requests.RequestException as e:
+        print(f"❌ Errore download {card_name}: {e}")
+        return card_name, None
+    except Exception as e:
+        print(f"❌ Errore processamento {card_name}: {e}")
+        return card_name, None
+
 @app.route('/')
 def home():
     return "✅ Backend attivo su Render"
@@ -89,6 +138,8 @@ def test_api():
 
 @app.route('/genera_pdf', methods=['POST'])
 def genera_pdf():
+    start_time = time.time()
+    
     try:
         print("🚀 Iniziando generazione PDF...")
         
@@ -152,63 +203,66 @@ def genera_pdf():
         
         print(f"📋 Totale carte da stampare: {len(all_cards)}")
         
-        # Processa le carte e scarica le immagini
-        card_images = {}  # Cache delle immagini per evitare download multipli
+        # NUOVO: Trova carte uniche per download parallelo
+        unique_cards = list(set(all_cards))
+        print(f"🔄 Carte uniche da scaricare: {len(unique_cards)}")
+        print(f"⏱️ Tempo preparazione: {time.time() - start_time:.1f}s")
+        
+        # NUOVO: Download parallelo delle immagini
+        card_images = {}  # Cache delle immagini
         
         try:
-            for i, card_name in enumerate(all_cards):
-                if card_name not in card_images:
-                    print(f"🔄 Processando carta {card_name} ({i+1}/{len(all_cards)})")
-                    
-                    image_url = get_card_image_url(card_name)
-                    if not image_url:
-                        print(f"❌ Nessun URL per {card_name}")
-                        continue
-                    
-                    try:
-                        # Scarica immagine
-                        print(f"⬇️ Scaricando: {image_url}")
-                        img_response = requests.get(image_url, timeout=15)
-                        img_response.raise_for_status()
-                        
-                        # Processa immagine
-                        img = Image.open(BytesIO(img_response.content))
-                        if img.mode != 'RGB':
-                            img = img.convert('RGB')
-                        
-                        # Ridimensiona per la stampa (risoluzione 300 DPI)
-                        # 6.4cm @ 300 DPI = 756 pixels, 8.9cm @ 300 DPI = 1051 pixels
-                        target_width = int(6.4 * 300 / 2.54)  # ~756px
-                        target_height = int(8.9 * 300 / 2.54)  # ~1051px
-                        img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
-                        
-                        # Salva immagine temporanea
-                        img_fd, img_path = tempfile.mkstemp(suffix='.jpg')
-                        os.close(img_fd)
-                        temp_images.append(img_path)
-                        
-                        img.save(img_path, format='JPEG', quality=95, optimize=True)
-                        card_images[card_name] = img_path
-                        print(f"💾 Immagine cached: {card_name}")
-                        
-                    except requests.RequestException as e:
-                        print(f"❌ Errore download {card_name}: {e}")
-                        continue
-                    except Exception as e:
-                        print(f"❌ Errore processamento {card_name}: {e}")
-                        continue
+            download_start = time.time()
+            print(f"🚀 Avvio download parallelo con max 6 thread...")
             
-            # Ora crea le pagine PDF con layout griglia
+            # Usa ThreadPoolExecutor per download parallelo
+            # 6 thread è un buon compromesso tra velocità e carico del server API
+            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+                # Sottometti tutti i task di download
+                future_to_card = {
+                    executor.submit(download_and_process_card_image, card): card 
+                    for card in unique_cards
+                }
+                
+                # Raccogli i risultati man mano che completano
+                completed = 0
+                for future in concurrent.futures.as_completed(future_to_card):
+                    card_name, img_path = future.result()
+                    completed += 1
+                    
+                    if img_path:
+                        card_images[card_name] = img_path
+                        temp_images.append(img_path)
+                        print(f"✅ [{completed}/{len(unique_cards)}] {card_name} completata")
+                    else:
+                        print(f"❌ [{completed}/{len(unique_cards)}] {card_name} fallita")
+                    
+                    # Progress update ogni 5 carte
+                    if completed % 5 == 0:
+                        elapsed = time.time() - download_start
+                        print(f"⏱️ Progress: {completed}/{len(unique_cards)} in {elapsed:.1f}s")
+            
+            download_time = time.time() - download_start
+            successful_downloads = len(card_images)
+            print(f"🎯 Download completato: {successful_downloads}/{len(unique_cards)} in {download_time:.1f}s")
+            print(f"📊 Velocità media: {download_time/len(unique_cards):.1f}s per carta")
+            
+            if successful_downloads == 0:
+                return jsonify({"error": "Nessuna immagine scaricata con successo"}), 400
+            
+            # Genera le pagine PDF con layout griglia
+            pdf_start = time.time()
             cards_on_current_page = 0
             
             for i, card_name in enumerate(all_cards):
                 if card_name not in card_images:
+                    print(f"⚠️ Saltando {card_name} (immagine non disponibile)")
                     continue
                 
                 # Inizia una nuova pagina se necessario
                 if cards_on_current_page == 0:
                     pdf.add_page()
-                    print(f"📄 Nuova pagina PDF")
+                    print(f"📄 Nuova pagina PDF ({len(pdf.pages)})")
                 
                 # Calcola posizione nella griglia
                 row = cards_on_current_page // CARDS_PER_ROW
@@ -229,19 +283,29 @@ def genera_pdf():
                 if cards_on_current_page >= CARDS_PER_PAGE:
                     cards_on_current_page = 0
             
+            pdf_creation_time = time.time() - pdf_start
+            print(f"📄 Creazione PDF: {pdf_creation_time:.1f}s")
+            
             if total_cards_processed == 0:
                 return jsonify({"error": "Nessuna carta è stata aggiunta al PDF"}), 400
             
-            # Genera PDF
+            # Genera PDF finale
+            output_start = time.time()
             print(f"📄 Generando PDF con {total_cards_processed} carte...")
             pdf.output(pdf_path)
+            output_time = time.time() - output_start
+            print(f"💾 Output PDF: {output_time:.1f}s")
             
             # Verifica che il file esista e non sia vuoto
             if not os.path.exists(pdf_path):
                 return jsonify({"error": "File PDF non creato"}), 500
                 
             pdf_size = os.path.getsize(pdf_path)
-            print(f"✅ PDF creato: {pdf_path} ({pdf_size} bytes)")
+            total_time = time.time() - start_time
+            
+            print(f"✅ PDF creato: {pdf_path} ({pdf_size:,} bytes)")
+            print(f"⏱️ Tempo totale: {total_time:.1f}s")
+            print(f"📊 Breakdown: Download={download_time:.1f}s, PDF={pdf_creation_time:.1f}s, Output={output_time:.1f}s")
             
             if pdf_size == 0:
                 return jsonify({"error": "PDF vuoto generato"}), 500
@@ -256,6 +320,7 @@ def genera_pdf():
             
         finally:
             # Pulizia file temporanei immagini
+            cleanup_start = time.time()
             for img_path in temp_images:
                 try:
                     if os.path.exists(img_path):
@@ -264,10 +329,14 @@ def genera_pdf():
                 except Exception as e:
                     print(f"⚠️ Errore rimozione {img_path}: {e}")
             
+            cleanup_time = time.time() - cleanup_start
+            print(f"🗑️ Cleanup completato in {cleanup_time:.1f}s")
+            
             # Il PDF temporaneo verrà rimosso automaticamente da Flask dopo send_file
             
     except Exception as e:
-        print(f"💥 Errore generale: {str(e)}")
+        total_time = time.time() - start_time
+        print(f"💥 Errore generale dopo {total_time:.1f}s: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Errore interno: {str(e)}"}), 500
