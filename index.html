@@ -78,7 +78,17 @@
   <h2>Lista Carte</h2>
   <textarea id="cardInput" rows="10" placeholder="4 Lorraine
 2 Fire Resonance
-1 Blazing Banner"></textarea><br>
+1 Blazing Banner
+
+# Material Deck
+1 Spirit of Serene Fire
+1 Rai, Spellcrafter
+
+# Main Deck
+4 Careful Study
+4 Dungeon Guide
+
+https://silvie.gg/decklist/8759"></textarea><br>
   
   <button onclick="generatePDF()" id="generateBtn">Genera PDF</button>
   
@@ -129,7 +139,14 @@
       const cards = [];
       
       for (const line of lines) {
-        const match = line.trim().match(/^(\d+)\s+(.+)$/);
+        const trimmedLine = line.trim();
+        
+        // Salta righe vuote, commenti (che iniziano con #) e URL (che iniziano con https://)
+        if (!trimmedLine || trimmedLine.startsWith('#') || trimmedLine.startsWith('https://')) {
+          continue;
+        }
+        
+        const match = trimmedLine.match(/^(\d+)\s+(.+)$/);
         if (match) {
           const count = parseInt(match[1]);
           const name = match[2].trim();
