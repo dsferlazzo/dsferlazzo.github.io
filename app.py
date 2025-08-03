@@ -35,14 +35,32 @@ def get_card_image_url(card_name):
         data = response.json()
         print(f"📊 Dati ricevuti: {bool(data and data.get('data'))}")
         
-        if data and data.get("data"):
-            card_data = data["data"][0]
-            editions = card_data.get("editions", [])
-            if editions and editions[0].get("image"):
-                image_path = editions[0]["image"]
-                full_image_url = API_BASE + image_path
-                print(f"🖼️ URL immagine: {full_image_url}")
-                return full_image_url
+        if data and data.get("editions"):
+            print(f"📋 Card data keys: {list(data.keys())}")
+            print(f"📛 Card name: {data.get('name', 'N/A')}")
+            
+            editions = data.get("editions", [])
+            print(f"📦 Editions trovate: {len(editions)}")
+            
+            if editions and len(editions) > 0:
+                first_edition = editions[0]
+                print(f"🎨 Prima edition keys: {list(first_edition.keys())}")
+                
+                if first_edition.get("image"):
+                    image_path = first_edition["image"]
+                    full_image_url = API_BASE + image_path
+                    print(f"🖼️ URL immagine: {full_image_url}")
+                    return full_image_url
+                else:
+                    print(f"❌ Nessun campo 'image' nella prima edition")
+                    print(f"🔍 Edition completa: {first_edition}")
+            else:
+                print(f"❌ Nessuna edition trovata")
+        else:
+            print(f"❌ Nessun campo 'editions' nell'API response")
+            print(f"📄 Response keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+            print(f"📄 Response preview: {str(data)[:300]}...")
+            
                 
         print(f"⚠️ Nessuna immagine trovata per {normalized_name}")
         return None
@@ -216,6 +234,7 @@ def debug_cards():
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
+
 
 
 
