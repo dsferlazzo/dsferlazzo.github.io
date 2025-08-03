@@ -59,7 +59,9 @@ def home():
 def test_api():
     """Endpoint per testare l'API esterna"""
     try:
-        response = requests.get(f"{API_BASE}/cards", params={"name": "Merlin, Kingslayer"}, timeout=10)
+        card_name = Merlin, Kingslayer
+        normalized_name = normalize_card_name(card_name)
+        response = requests.get(f"{API_BASE}/cards", params={"name": normalized_name}, timeout=10)
         return jsonify({
             "status": response.status_code,
             "data": response.json() if response.status_code == 200 else "Error"
@@ -214,4 +216,5 @@ def debug_cards():
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
+
 
