@@ -25,7 +25,7 @@ def get_card_image_url(card_name):
         normalized_name = normalize_card_name(card_name)
         print(f"🔍 Cercando: {card_name} → {normalized_name}")
         
-        response = requests.get(f"{API_BASE}/cards", params={"name": normalized_name}, timeout=10)
+        response = requests.get(f"{API_BASE}/cards", params={"slug": normalized_name}, timeout=10)
         print(f"📡 API Response Status: {response.status_code}")
         
         if response.status_code != 200:
@@ -61,7 +61,7 @@ def test_api():
     try:
         card_name = "Merlin, Kingslayer"
         normalized_name = normalize_card_name(card_name)
-        response = requests.get(f"{API_BASE}/cards", params={"name": normalized_name}, timeout=10)
+        response = requests.get(f"{API_BASE}/cards", params={"slug": normalized_name}, timeout=10)
         return jsonify({
             "status": response.status_code,
             "data": response.json() if response.status_code == 200 else "Error"
@@ -216,6 +216,7 @@ def debug_cards():
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
+
 
 
 
