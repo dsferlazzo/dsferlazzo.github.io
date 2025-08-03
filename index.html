@@ -49,7 +49,7 @@
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'carte.pdf';
+      a.download = 'rand.pdf';
       a.click();
       window.URL.revokeObjectURL(url);
       document.getElementById('status').textContent = 'PDF generato!';
@@ -57,3 +57,4 @@
   </script>
 </body>
 </html>
+
