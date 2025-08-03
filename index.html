@@ -40,6 +40,36 @@
     .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
     .info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0b5266; }
     #debug { margin-top: 20px; background: #f8f9fa; padding: 10px; border-radius: 5px; }
+    
+    .debug-checkbox {
+      margin: 15px 0;
+      padding: 10px;
+      background: #f8f9fa;
+      border-radius: 5px;
+      border: 1px solid #dee2e6;
+    }
+    .debug-checkbox label {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .debug-checkbox input[type="checkbox"] {
+      margin-right: 8px;
+      transform: scale(1.2);
+    }
+    
+    #debugOptions {
+      margin-top: 10px;
+      padding: 10px;
+      background: #fff3cd;
+      border: 1px solid #ffeaa7;
+      border-radius: 5px;
+    }
+    #debugOptions h4 {
+      margin: 0 0 10px 0;
+      color: #856404;
+    }
   </style>
 </head>
 <body>
@@ -51,14 +81,38 @@
 1 Blazing Banner"></textarea><br>
   
   <button onclick="generatePDF()" id="generateBtn">Genera PDF</button>
-  <button onclick="debugCards()" id="debugBtn">Debug Carte</button>
-  <button onclick="testAPI()" id="testBtn">Test API</button>
+  
+  <div class="debug-checkbox">
+    <label>
+      <input type="checkbox" id="showDebug" onchange="toggleDebugOptions()"> 
+      Mostra opzioni debug
+    </label>
+  </div>
+  
+  <div id="debugOptions" style="display: none;">
+    <h4>🔧 Strumenti di Debug</h4>
+    <button onclick="debugCards()" id="debugBtn">Debug Carte</button>
+    <button onclick="testAPI()" id="testBtn">Test API</button>
+  </div>
   
   <div id="status"></div>
   <div id="debug"></div>
 
   <script>
     const API_URL = 'https://dsferlazzo-github-io.onrender.com';
+    
+    function toggleDebugOptions() {
+      const checkbox = document.getElementById('showDebug');
+      const debugOptions = document.getElementById('debugOptions');
+      
+      if (checkbox.checked) {
+        debugOptions.style.display = 'block';
+      } else {
+        debugOptions.style.display = 'none';
+        // Nascondi anche l'area debug quando si disabilitano le opzioni
+        document.getElementById('debug').innerHTML = '';
+      }
+    }
     
     function setStatus(message, type = 'info') {
       const statusDiv = document.getElementById('status');
@@ -196,18 +250,22 @@
           return;
         }
         
-        // Crea il download
+        // Crea il download con il nuovo nome
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'carte.pdf';
+        a.download = 'proxy_list.pdf';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
         
         setStatus(`✅ PDF generato! (${blob.size} bytes)`, 'success');
-        setDebug(`<h3>PDF Info:</h3><ul><li>Dimensione: ${blob.size} bytes</li><li>Tipo: ${blob.type}</li><li>Content-Type: ${contentType}</li></ul>`);
+        
+        // Mostra info PDF solo se debug è abilitato
+        if (document.getElementById('showDebug').checked) {
+          setDebug(`<h3>PDF Info:</h3><ul><li>Dimensione: ${blob.size} bytes</li><li>Tipo: ${blob.type}</li><li>Content-Type: ${contentType}</li></ul>`);
+        }
         
       } catch (error) {
         setStatus(`❌ Errore: ${error.message}`, 'error');
